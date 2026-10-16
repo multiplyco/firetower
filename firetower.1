@@ -1,0 +1,171 @@
+.Dd October 15, 2026
+.Dt FIRETOWER 1
+.Os
+.Sh NAME
+.Nm firetower
+.Nd show which processes use the CPU, and who started them
+.Sh SYNOPSIS
+.Nm
+.Op Fl hV
+.Op Fl n Ar rows
+.Op Fl s Ar seconds
+.Op Ar rows
+.Sh DESCRIPTION
+.Nm
+samples the system for two seconds (see
+.Fl s )
+and prints one screen about where the CPU time went.
+.Pp
+The options are as follows:
+.Bl -tag -width Ds
+.It Fl h , Fl Fl help
+Print a usage summary.
+.It Fl n Ar rows
+List this many of the busiest processes.
+The default is 12.
+A bare
+.Ar rows
+operand does the same.
+.It Fl s Ar seconds
+Sample over this many whole seconds.
+The default is 2.
+A longer window smooths out bursts.
+.It Fl V , Fl Fl version
+Print the version.
+.El
+.Ss The header
+The first line gives the load averages over one, five and fifteen minutes,
+and the one-minute load divided by the number of cores.
+Above 1.0, more work is waiting than the cores can run.
+.Pp
+Next come the share of CPU time spent in programs
+.Pq user ,
+in the kernel on their behalf
+.Pq sys ,
+and idle; then memory: the total, what the kernel has wired, what it holds
+compressed, and how much it counts as free; then, on a laptop, the battery
+or AC state, the charge and the time left.
+Below 120 columns these are printed on separate lines.
+.Ss Notes
+Lines starting with
+.Ql ->
+say what the numbers add up to:
+.Bl -bullet
+.It
+saturated: less than 10% idle;
+.It
+sys above user, and at least 25%: the kernel is doing most of the work;
+.It
+memory pressure: less than 20% free by the kernel's own measure;
+.It
+thermal: the CPU speed is limited;
+.It
+a process using at least 25% CPU has run for over an hour under a Claude
+Code session that is now idle, so it may have been left behind.
+.El
+.Ss The table
+Each busy process gets a row.
+.Sy %CPU
+is over the sampling window; 100% is one full core.
+It is red from 100% and yellow from 50%.
+.Sy AGE
+is how long the process has run.
+The last three columns give context:
+.Bl -tag -width "LAUNCHED BY"
+.It Sy WHERE
+The working directory, usually the repository or worktree.
+.It Sy WHAT
+What it runs: a JVM main class or jar, a script's file name, a
+subcommand.
+For a Claude Code session, its state and title.
+.It Sy LAUNCHED BY
+The parent, then the nearest coding agent above it, with that session's
+state and title, and its directory when that differs.
+.El
+.Pp
+A coding agent is a registered Claude Code session or a process named aider,
+amp, claude, codex, cursor-agent, gemini, goose or opencode.
+Only Claude Code sessions show a state and title.
+.Pp
+Below 120 columns the context moves to an indented line under each row.
+.Ss Totals
+.Sy by program
+adds up the CPU of every process with the same name and lists the eight
+largest, so many small processes are not missed.
+.Sy agents
+does the same for coding agents, when they did not make that list.
+.Sh ENVIRONMENT
+.Bl -tag -width CLAUDE_CONFIG_DIR
+.It Ev CLAUDE_CONFIG_DIR
+Where Claude Code keeps its state.
+The default is
+.Pa ~/.claude .
+.It Ev COLUMNS
+The terminal width, overriding what the terminal reports.
+.It Ev NO_COLOR
+When set to a non-empty value, output is not colored.
+Output is never colored when it is not a terminal.
+.El
+.Sh FILES
+.Bl -tag -width Ds
+.It Pa ~/.claude/sessions/ Ns Ar pid Ns Pa .json
+Claude Code's registry of live sessions, read for a session's state and
+name.
+.It Pa ~/.claude/projects/*/ Ns Ar session Ns Pa .jsonl
+Session transcripts.
+Only title records in the last megabyte are read.
+.El
+.Sh EXIT STATUS
+.Ex -std
+Invalid options exit with status 2.
+.Sh EXAMPLES
+Take a look:
+.Dl $ firetower
+.Pp
+Show only the five busiest processes:
+.Dl $ firetower 5
+.Pp
+List more of them over a smoother ten-second sample:
+.Dl $ firetower -n 25 -s 10
+.Sh SEE ALSO
+.Xr fs_usage 1 ,
+.Xr pmset 1 ,
+.Xr powermetrics 1 ,
+.Xr ps 1 ,
+.Xr top 1 ,
+.Xr lsof 8
+.Sh AUTHORS
+.An Oskar Bo\(:ethius Lissheim
+.Sh CAVEATS
+.Nm
+runs on macOS only.
+.Pp
+Without root, the working directory of another user's process is not shown.
+.Pp
+Claude Code's session files are internal and undocumented.
+If their format changes, sessions are shown by name and process ID alone.
+.Sh SECURITY CONSIDERATIONS
+Command lines often carry tokens and passwords, and a process can rewrite
+its own.
+.Nm
+reads them only to find a hint and never prints one whole.
+Program names come from the kernel, which a process cannot rename; a name
+the kernel cuts at 16 characters is completed from the path of the
+executable the kernel ran.
+.Pp
+A hint is a dotted name (a script, class or module) or a short lowercase
+subcommand with at most two digits, such as
+.Ql test
+or
+.Ql dev:ram .
+It is never taken from inline code such as
+.Ql bash -c
+or
+.Ql node -e .
+A secret passed as the first argument and shaped like a subcommand, such as
+.Ql hunter2 ,
+still passes, since nothing tells the two apart.
+.Pp
+Session titles are printed as Claude Code wrote them.
+.Nm
+makes no network connections and writes no files.
